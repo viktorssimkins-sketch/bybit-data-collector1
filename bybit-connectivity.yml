@@ -1,5 +1,5 @@
 
-name: Bybit connectivity test
+name: Bybit WebSocket test
 
 on:
   workflow_dispatch:
@@ -10,33 +10,43 @@ permissions:
   contents: read
 
 jobs:
-  test-bybit:
+  websocket-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - name: Test Bybit API
+      - name: Install websocket client
+        run: pip install websocket-client
+
+      - name: Test Bybit WebSocket
         run: |
           python - <<'PY'
           import json
-          import urllib.request
+          import websocket
 
-          urls = {
-              "KLINE": "https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=1&limit=3",
-              "BRKB": "https://api.bybit.com/v5/market/instruments-info?category=linear&symbol=BRKBUSDT",
-              "FUNDING": "https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=3",
-              "OI": "https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=3"
-          }
+          url = "wss://stream.bybit.com/v5/public/linear"
 
-          for name, url in urls.items():
-              try:
-                  req = urllib.request.Request(
-                      url, headers={"User-Agent": "Mozilla/5.0"}
-                  )
-                  with urllib.request.urlopen(req, timeout=20) as r:
-                      data = json.loads(r.read())
-                      print(name, "HTTP", r.status,
-                            "retCode", data.get("retCode"),
-                            "retMsg", data.get("retMsg"))
-                      print("Rows:", len(data.get("result", {}).get("list", [])))
-              except Exception as e:
-                  print(name, "ERROR:", str(e))
+          print("Connecting to Bybit...")
+          ws = websocket.create_connection(url, timeout=15)
+          print("CONNECTED")
+
+          ws.send(json.dumps({
+              "op": "subscribe",
+              "args": ["tickers.BTCUSDT"]
+          }))
+
+          print("SUBSCRIBE SENT")
+
+          for i in range(5):
+              msg = json.loads(ws.recv())
+              print("MESSAGE:", json.dumps(msg)[:1500])
+
+              if msg.get("op") == "subscribe":
+                  print("SUBSCRIPTION ACK:", msg.get("success"))
+
+              if msg.get("topic") == "tickers.BTCUSDT":
+                  print("LIVE TICKER RECEIVED")
+                  break
+
+          ws.close()
+          print("TEST FINISHED")
           PY
