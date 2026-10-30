@@ -1,0 +1,52 @@
+name: Bybit WebSocket test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  websocket-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Install websocket client
+        run: pip install websocket-client
+
+      - name: Test Bybit WebSocket
+        run: |
+          python - <<'PY'
+          import json
+          import websocket
+
+          url = "wss://stream.bybit.com/v5/public/linear"
+
+          print("Connecting to Bybit...")
+          ws = websocket.create_connection(url, timeout=15)
+          print("CONNECTED")
+
+          ws.send(json.dumps({
+              "op": "subscribe",
+              "args": ["tickers.BTCUSDT"]
+          }))
+
+          print("SUBSCRIBE SENT")
+
+          for i in range(10):
+              msg = json.loads(ws.recv())
+              print("MESSAGE:", json.dumps(msg)[:1500])
+
+              if msg.get("op") == "subscribe":
+                  print("SUBSCRIPTION ACK:", msg.get("success"))
+
+              if msg.get("topic") == "tickers.BTCUSDT":
+                  print("LIVE TICKER RECEIVED")
+                  break
+
+          ws.close()
+          print("TEST FINISHED")
+          PY
