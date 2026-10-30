@@ -1,0 +1,42 @@
+
+name: Bybit connectivity test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-bybit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test Bybit API
+        run: |
+          python - <<'PY'
+          import json
+          import urllib.request
+
+          urls = {
+              "KLINE": "https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=1&limit=3",
+              "BRKB": "https://api.bybit.com/v5/market/instruments-info?category=linear&symbol=BRKBUSDT",
+              "FUNDING": "https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=3",
+              "OI": "https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=3"
+          }
+
+          for name, url in urls.items():
+              try:
+                  req = urllib.request.Request(
+                      url, headers={"User-Agent": "Mozilla/5.0"}
+                  )
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      data = json.loads(r.read())
+                      print(name, "HTTP", r.status,
+                            "retCode", data.get("retCode"),
+                            "retMsg", data.get("retMsg"))
+                      print("Rows:", len(data.get("result", {}).get("list", [])))
+              except Exception as e:
+                  print(name, "ERROR:", str(e))
+          PY
